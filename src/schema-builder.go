@@ -10,11 +10,22 @@ import (
 )
 
 var typeMap = map[string]*graphql.Scalar{
-	"string": graphql.String,
-	"bool":   graphql.Boolean,
-	"int":    graphql.Int,
-	"float":  graphql.Float,
-	"time":   graphql.DateTime,
+	"string":    graphql.String,
+	"bool":      graphql.Boolean,
+	"float":     graphql.Float,
+	"time.Time": graphql.DateTime,
+	"float32":   graphql.Float,
+	"float64":   graphql.Float,
+	"int":       graphql.Int,
+	"int8":      graphql.Int,
+	"int16":     graphql.Int,
+	"int32":     graphql.Int,
+	"int64":     graphql.Int,
+	"uint":      graphql.Int,
+	"uint8":     graphql.Int,
+	"uint16":    graphql.Int,
+	"uint32":    graphql.Int,
+	"uint64":    graphql.Int,
 }
 
 func getTagValue(gqlTag string, key string) (string, error) {
@@ -61,7 +72,6 @@ func structConverter(tObj reflect.Type) (graphql.Fields, error) {
 
 	for i := 0; i < tObj.NumField(); i++ {
 		tCurr := tObj.Field(i)
-		//vCurr := vObj.Field(i)
 		fieldGqlType, err := getGraphqlType(tCurr)
 		if err != nil {
 			return nil, err
@@ -87,10 +97,15 @@ func structConverter(tObj reflect.Type) (graphql.Fields, error) {
 
 func getGraphqlType(tField reflect.StructField) (graphql.Output, error) {
 	fType := tField.Type
-	//fmt.Println(tField.Tag.Get("gql"))
-	if fType.Kind() == reflect.Struct {
+	if fType.String() == "time.Time" {
+		elemType, err := convertSimpleType(fType.String())
+		if err != nil {
+			return nil, fmt.Errorf("GenerationError - Cause : %s does not have a valid tag", tField.Name)
+		}
+		return elemType, nil
+	} else if fType.String() != "time.Time" && fType.Kind() == reflect.Struct {
 		return structToObject(fType)
-	} else if fType.Kind() == reflect.Slice &&
+	} else if fType.String() != "time.Time" && fType.Kind() == reflect.Slice &&
 		fType.Elem().Kind() == reflect.Struct {
 		elemType, err := structToObject(fType.Elem())
 		if err != nil {
@@ -98,14 +113,14 @@ func getGraphqlType(tField reflect.StructField) (graphql.Output, error) {
 		}
 		return graphql.NewList(elemType), nil
 	} else if fType.Kind() == reflect.Slice {
-		elemType, err := convertSimpleType(tField.Tag.Get("gql"))
+		elemType, err := convertSimpleType(fType.Elem().String())
 		if err != nil {
 			return nil, fmt.Errorf("GenerationError - Cause : %s does not have a valid tag", tField.Name)
 		}
 		return graphql.NewList(elemType), nil
 	}
 
-	output, err := convertSimpleType(tField.Tag.Get("gql"))
+	output, err := convertSimpleType(fType.String())
 	if err != nil {
 		return nil, fmt.Errorf("GenerationError - Cause : %s does not have a valid tag", tField.Name)
 	}
@@ -126,13 +141,8 @@ func structToObject(objectType reflect.Type) (*graphql.Object, error) {
 	), nil
 }
 
-func convertSimpleType(gqlTag string) (*graphql.Scalar, error) {
-	t, err := getTagValue(gqlTag, "type")
-	if err != nil {
-		return nil, err
-	}
-
-	graphqlType, ok := typeMap[t]
+func convertSimpleType(tagType string) (*graphql.Scalar, error) {
+	graphqlType, ok := typeMap[tagType]
 
 	if !ok {
 		return nil, errors.New("Invalid Type")
